@@ -1,0 +1,173 @@
+package client
+
+const (
+	COMPANY_NAME = "KeyTalk"
+	PRODUCT_NAME = "KeyTalk"
+)
+
+const (
+	MAX_PROVIDER_LENGTH    = 64
+	MAX_SERVICE_LENGTH     = 64
+	MAX_USER_ID_LENGTH     = 256
+	MAX_CLIENT_DESC_LENGTH = 64
+	MAX_PASSWORD_LENGTH    = 64
+	MAX_CHALLENGE_LENGTH   = 64
+	MAX_RESPONSE_LENGTH    = 64
+	MAX_PINCODE_LENGTH     = 64
+	MAX_TEXT_LENGTH        = 1024
+)
+
+const (
+	SUPPORT_EMAIL = "support@keytalk.com"
+)
+
+// # @note hardcoded CS for formula "0" as calculated by the client, hardcoded because it is used by the server which cannot call client's CS calculation routines
+const (
+	ZERO_CS = "CS-F7B11509F4D675C3C44F0DD37CA830BB02E8CFA58F04C46283C4BFCBDCE1FF45"
+)
+
+// Credential types
+const (
+	CRED_USERID   = "USERID"
+	CRED_HWSIG    = "HWSIG"
+	CRED_PASSWD   = "PASSWD"
+	CRED_PIN      = "PIN"
+	CRED_RESPONSE = "RESPONSE"
+	CRED_BIO      = "BIO"
+	CRED_CSR      = "CSR"
+
+	CERT_FORMAT_P12 = "P12"
+	CERT_FORMAT_PEM = "PEM"
+)
+
+var CREDENTIAL_STRINGS = []string{CRED_USERID, CRED_HWSIG, CRED_PASSWD, CRED_PIN, CRED_RESPONSE, CRED_BIO, CRED_CSR}
+var CERT_FORMAT_STRINGS = []string{CERT_FORMAT_P12, CERT_FORMAT_PEM}
+
+const (
+	AUTH_OK             = "OK"
+	AUTH_DELAY          = "DELAY"
+	AUTH_LOCKED         = "LOCKED"
+	AUTH_EXPIRED        = "EXPIRED"
+	AUTH_CR_OK_CONTINUE = "CR-OK-CONTINUE"
+	AUTH_CHALLENGE      = "CHALLENGE"
+)
+
+var AUTH_RESULT_STRINGS = []string{AUTH_OK, AUTH_DELAY, AUTH_LOCKED, AUTH_EXPIRED, AUTH_CR_OK_CONTINUE, AUTH_CHALLENGE}
+
+// RCDP common constants
+const (
+	RCDP_PACKAGED_CERT_EXPORT_PASSWDSIZE = 30
+	RCDP_PASSWORD_NEVER_EXPIRES          = -1
+)
+
+// RCDPv1 constants
+const (
+	RCDP_VERSION_1_4 = "1.4"
+	RCDP_VERSION_1_5 = "1.5"
+)
+
+var (
+	SERVER_SUPPORTED_RCDPV1_VERSIONS         = []string{RCDP_VERSION_1_4, RCDP_VERSION_1_5}
+	DESKTOP_CLIENT_SUPPORTED_RCDPV1_VERSIONS = []string{RCDP_VERSION_1_4, RCDP_VERSION_1_5}
+	IOS_CLIENT_SUPPORTED_RCDPV1_VERSIONS     = []string{RCDP_VERSION_1_4, RCDP_VERSION_1_5}
+)
+
+// RCDP v2 constants
+const (
+	RCDP_VERSION_2_0 = "2.0.0"
+)
+
+var SERVER_SUPPORTED_RCDPV2_VERSIONS = []string{RCDP_VERSION_2_0}
+
+const (
+	RCDPV2_HTTP_REQUEST_URI_PREFIX = "rcdp"
+	RCDPV2_HTTP_SID_COOKIE_NAME    = "keytalkcookie"
+)
+
+// requests
+const (
+	RCDPV2_REQUEST_EOC               = "eoc"
+	RCDPV2_REQUEST_HELLO             = "hello"
+	RCDPV2_REQUEST_HANDSHAKE         = "handshake"
+	RCDPV2_REQUEST_AUTH_REQUIREMENTS = "auth-requirements"
+	RCDPV2_REQUEST_AUTHENTICATION    = "authentication"
+	RCDPV2_REQUEST_LAST_MESSAGES     = "last-messages"
+	RCDPV2_REQUEST_CERT              = "cert"
+)
+
+var RCDPV2_REQUEST_STRINGS = []string{RCDPV2_REQUEST_EOC,
+	RCDPV2_REQUEST_HELLO,
+	RCDPV2_REQUEST_HANDSHAKE,
+	RCDPV2_REQUEST_AUTH_REQUIREMENTS,
+	RCDPV2_REQUEST_AUTHENTICATION,
+	RCDPV2_REQUEST_LAST_MESSAGES,
+	RCDPV2_REQUEST_CERT,
+}
+
+const (
+	RCDPV2_REQUEST_PARAM_NAME_CALLER_APP_DESCRIPTION = "caller-app-description"
+	RCDPV2_REQUEST_PARAM_NAME_CALLER_HW_DESCRIPTION  = "caller-hw-description"
+	RCDPV2_REQUEST_PARAM_NAME_REASON                 = "reason"
+	RCDPV2_REQUEST_PARAM_NAME_CALLER_UTC             = "caller-utc"
+	RCDPV2_REQUEST_PARAM_NAME_SERVICE                = "service"
+	RCDPV2_REQUEST_PARAM_NAME_LAST_MESSAGES_FROM_UTC = "from-utc"
+	RCDPV2_REQUEST_PARAM_NAME_CERT_FORMAT            = "format"
+	RCDPV2_REQUEST_PARAM_NAME_CERT_INCLUDE_CHAIN     = "include-chain"
+	RCDPV2_REQUEST_PARAM_NAME_IPS                    = "ips"
+	RCDPV2_REQUEST_PARAM_NAME_DIGEST                 = "digest"
+	RCDPV2_REQUEST_PARAM_NAME_RESPONSES              = "responses"
+)
+
+// responses
+const (
+	RCDPV2_RESPONSE_EOC               = "eoc"
+	RCDPV2_RESPONSE_ERROR             = "error"
+	RCDPV2_RESPONSE_HELLO             = "hello"
+	RCDPV2_RESPONSE_HANDSHAKE         = "handshake"
+	RCDPV2_RESPONSE_AUTH_REQUIREMENTS = "auth-requirements"
+	RCDPV2_RESPONSE_AUTH_RESULT       = "auth-result"
+	RCDPV2_RESPONSE_LAST_MESSAGES     = "last-messages"
+	RCDPV2_RESPONSE_CERT              = "cert"
+)
+
+var RCDPV2_RESPONSE_STRINGS = []string{RCDPV2_RESPONSE_EOC,
+	RCDPV2_RESPONSE_ERROR,
+	RCDPV2_RESPONSE_HELLO,
+	RCDPV2_RESPONSE_HANDSHAKE,
+	RCDPV2_RESPONSE_AUTH_REQUIREMENTS,
+	RCDPV2_RESPONSE_AUTH_RESULT,
+	RCDPV2_RESPONSE_LAST_MESSAGES,
+	RCDPV2_RESPONSE_CERT,
+}
+
+const (
+	RCDPV2_RESPONSE_PARAM_NAME_STATUS                  = "status"
+	RCDPV2_RESPONSE_PARAM_NAME_ERROR_CODE              = "code"
+	RCDPV2_RESPONSE_PARAM_NAME_ERROR_DESCRIPTION       = "description"
+	RCDPV2_RESPONSE_PARAM_NAME_VERSION                 = "version"
+	RCDPV2_RESPONSE_PARAM_NAME_REASON                  = "reason"
+	RCDPV2_RESPONSE_PARAM_NAME_SERVER_UTC              = "server-utc"
+	RCDPV2_RESPONSE_PARAM_NAME_CRED_TYPES              = "credential-types"
+	RCDPV2_RESPONSE_PARAM_NAME_HWSIG_FORMULA           = "hwsig_formula"
+	RCDPV2_RESPONSE_PARAM_NAME_PASSWORD_PROMPT         = "password-prompt"
+	RCDPV2_RESPONSE_PARAM_NAME_CHALLENGES              = "challenges"
+	RCDPV2_RESPONSE_PARAM_NAME_RESPONSE_NAMES          = "response-names"
+	RCDPV2_RESPONSE_PARAM_NAME_AUTH_STATUS             = "auth-status"
+	RCDPV2_RESPONSE_PARAM_NAME_PASSWORD_VALIDITY       = "password-validity"
+	RCDPV2_RESPONSE_PARAM_NAME_DELAY                   = "delay"
+	RCDPV2_RESPONSE_PARAM_NAME_LAST_MESSAGES           = "messages"
+	RCDPV2_RESPONSE_PARAM_NAME_MESSAGE_UTC             = "utc"
+	RCDPV2_RESPONSE_PARAM_NAME_MESSAGE_TEXT            = "text"
+	RCDPV2_RESPONSE_PARAM_NAME_CERT                    = "cert"
+	RCDPV2_RESPONSE_PARAM_NAME_SERVICE_URI             = "service-uri"
+	RCDPV2_RESPONSE_PARAM_NAME_RESOLVE_SERVICE_URI     = "resolve-service-uri"
+	RCDPV2_RESPONSE_PARAM_NAME_CALC_SERVICE_URI_DIGEST = "calc-service-uri-digest"
+	RCDPV2_RESPONSE_PARAM_NAME_EXECUTE_SYNC            = "execute-sync"
+)
+
+// states
+var RCDPV2_STATE_STRINGS = []string{"closed", "hello", "connected", "pending-response", "authenticated"}
+
+const (
+	RCDPV2_PACKAGED_CERT_EXPORT_PASSWDSIZE = 30
+)
