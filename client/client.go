@@ -2,7 +2,6 @@
 package client
 
 import (
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -12,8 +11,11 @@ import (
 	"net/http/cookiejar"
 	"net/http/httputil"
 	"net/url"
+	"strconv"
+	"strings"
 	"time"
 
+	"github.com/keytalk/libkeytalk/hwsig"
 	"github.com/keytalk/libkeytalk/rccd"
 	"github.com/op/go-logging"
 
@@ -132,11 +134,14 @@ type requestAuthCredentials struct {
 }
 
 type authenticateResponse struct {
-	Status          string   `json:"status"`
-	CredentialTypes []string `json:"credential-types"`
-	Formula         string   `json:"hwsig_formula"`
-	Prompt          string   `json:"password-prompt"`
-	ServiceURI      string   `json:"service-uri"`
+	Status           string   `json:"status"`
+	AuthStatus       string   `json:"auth-status"`
+	Delay            string   `json:"delay"`
+	PasswordValidity string   `json:"password-validity"`
+	CredentialTypes  []string `json:"credential-types"`
+	Formula          string   `json:"hwsig_formula"`
+	Prompt           string   `json:"password-prompt"`
+	ServiceURI       string   `json:"service-uri"`
 }
 
 type lastMessagesResponse struct {
@@ -169,6 +174,7 @@ type getCertificateResponse struct {
 
 type Requirements struct {
 	CredentialTypes []string
+	Formula         []hwsig.Component
 }
 
 func (kc *Client) hello() error {
@@ -225,11 +231,19 @@ func (kc *Client) authenticationRequirements(service string) (*Requirements, err
 	}
 
 	if resp.Status != RCDPV2_RESPONSE_AUTH_REQUIREMENTS {
-		return nil, fmt.Errorf("Unexpected response: expected %s, got %s", RCDPV2_RESPONSE_AUTH_REQUIREMENTS, resp.Status)
+		return nil, fmt.Errorf("Unexpected response: expected %s, got %s: %#v", RCDPV2_RESPONSE_AUTH_REQUIREMENTS, resp.Status, resp)
+	}
+
+	formula := []hwsig.Component{}
+	for _, f := range strings.Split(resp.Formula, ",") {
+		if v, err := strconv.Atoi(f); err == nil {
+			formula = append(formula, hwsig.Component(v))
+		}
 	}
 
 	return &Requirements{
 		CredentialTypes: resp.CredentialTypes,
+		Formula:         formula,
 	}, nil
 }
 
@@ -238,19 +252,12 @@ func (kc *Client) isCredentialResponseAuthentication(service string) error {
 	return nil
 }
 
-func (kc *Client) authenticate(username string, password string, service string) error {
-	values := url.Values{
-		CRED_USERID: []string{username},
-		CRED_PASSWD: []string{password},
+func (kc *Client) authenticate(creds map[string]string, service string) error {
+	values := url.Values{}
+
+	for k, v := range creds {
+		values.Add(k, v)
 	}
-
-	// todo(nl5887): add hardware signatures
-	values.Add(CRED_HWSIG, "HWSIG-123456")
-
-	// TODO: CRED_HWSIG
-	/*
-		if requirements.has(CRED_USERID
-	*/
 
 	//requirement.ServiceURI
 
@@ -271,8 +278,36 @@ func (kc *Client) authenticate(username string, password string, service string)
 		return fmt.Errorf("Unexpected response: expected %s, got %s", RCDPV2_RESPONSE_AUTH_RESULT, resp.Status)
 	}
 
+	if resp.AuthStatus == "OK" {
+	} else if resp.AuthStatus == "DELAY" {
+		delay, _ := strconv.Atoi(resp.Delay)
+		return ErrAuthDelay{
+			Delay: delay,
+		}
+	} else {
+		return ErrAuth{
+			Status: resp.AuthStatus,
+		}
+	}
+
 	return nil
 
+}
+
+type ErrAuth struct {
+	Status string
+}
+
+func (err ErrAuth) Error() string {
+	return fmt.Sprintf("Authentication failed, status %s.", err.Status)
+}
+
+type ErrAuthDelay struct {
+	Delay int
+}
+
+func (ad ErrAuthDelay) Error() string {
+	return fmt.Sprintf("Authentication failed, user banned for %d seconds.", ad.Delay)
 }
 
 type OptionFunc func(v url.Values)
@@ -383,16 +418,7 @@ func (uc *UserCertificate) PrivateKey() interface{} {
 // Authenticate will authenticate username, password and service with the Keytalk server and return
 // a private key and certificate.
 func (kc *Client) Authenticate(username string, password string, service string) (*UserCertificate, error) {
-	// we're skipping the insecure skip verify
 	// todo(nl5887): add certificates from rccd to verify
-	tlsConfig := tls.Config{
-		InsecureSkipVerify: false,
-	}
-
-	transport := &http.Transport{TLSClientConfig: &tlsConfig}
-
-	kc.Client.Transport = transport
-
 	if err := kc.hello(); err != nil {
 		return nil, err
 	}
@@ -405,14 +431,28 @@ func (kc *Client) Authenticate(username string, password string, service string)
 		return nil, err
 	}
 
+	creds := map[string]string{}
+
 	if requirements, err := kc.authenticationRequirements(service); err != nil {
 		return nil, err
 	} else {
-		// credentialtypes of requirements
-		_ = requirements
+		for _, v := range requirements.CredentialTypes {
+			switch v {
+			case CRED_USERID:
+				creds[CRED_USERID] = username
+			case CRED_PASSWD:
+				creds[CRED_PASSWD] = password
+			case CRED_HWSIG:
+				if signature, err := hwsig.Calc(requirements.Formula); err == nil {
+					creds[CRED_HWSIG] = signature
+				} else {
+					return nil, err
+				}
+			}
+		}
 	}
 
-	if err := kc.authenticate(username, password, service); err != nil {
+	if err := kc.authenticate(creds, service); err != nil {
 		return nil, err
 	}
 

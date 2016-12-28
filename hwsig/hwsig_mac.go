@@ -2,7 +2,17 @@
 
 package hwsig
 
-import "syscall"
+import (
+	"crypto/sha256"
+	"fmt"
+	"io/ioutil"
+	"math/rand"
+	"os"
+	"path"
+	"syscall"
+
+	"github.com/mitchellh/go-homedir"
+)
 
 var (
 	_ = register(ComponentOsXUDID, func() (string, error) {
@@ -25,5 +35,32 @@ var (
 
 	_ = register(ComponentOsXSerialNumber, func() (string, error) {
 		return "", nil
+	})
+
+	_ = register(ComponentOsXGenerated, func() (string, error) {
+		if homedir, err := homedir.Dir(); err != nil {
+			return "", err
+		} else {
+
+			filename := path.Join(homedir, "Library", "Keytalk", "uuid")
+
+			if _, err := os.Stat(filename); os.IsNotExist(err) {
+				data := make([]byte, 256)
+				if _, err := rand.Read(data); err != nil {
+					return "", err
+				}
+
+				signature := fmt.Sprintf("%x", sha256.Sum256(data))
+
+				err := ioutil.WriteFile(filename, []byte(signature), 0600)
+				return signature, err
+			} else if err != nil {
+				return "", err
+			} else if data, err := ioutil.ReadFile(filename); err != nil {
+				return "", err
+			} else {
+				return string(data), nil
+			}
+		}
 	})
 )

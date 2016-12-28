@@ -44,6 +44,7 @@ const (
 	ComponentOsXCpuInformation
 	ComponentOsXSerialNumber
 	ComponentOsXSentinel
+	ComponentOsXGenerated = 599
 
 	ComponentLinuxHddSerial   Component = 601  // 601: Primary HDD Serial.
 	ComponentLinuxNicMac                = iota // 602: Primary NIC MAC-address.
@@ -83,22 +84,19 @@ func CalcAll() (string, error) {
 
 // Calc calculates the signature for one or more components
 func Calc(components []Component) (string, error) {
+	h := sha256.New()
 
 	for _, component := range components {
-		h := sha256.New()
-
 		if componentFn, ok := componentMap[component]; !ok {
-			return "", fmt.Errorf("Component %d not supported on this platform.", component)
+			// ignore
 		} else if val, err := componentFn(); err != nil {
 			return "", err
 		} else {
 			h.Write([]byte(val))
 		}
-
-		fmt.Printf("%d:CS-%s\n", component, fmt.Sprintf("%x", h.Sum(nil)))
 	}
 
-	return "", nil
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
 
 func componentMacAddress() (string, error) {
