@@ -1,11 +1,11 @@
 # Keytalk SDK for Go
-[![GoDoc](https://godoc.org/github.com/KeyTalk/Go?status.svg)](http://godoc.org/github.com/KeyTalk/Go) [![Build Status](https://travis-ci.org/KeyTalk/Go.svg?branch=master)](https://travis-ci.org/KeyTalk/Go)
+[![GoDoc](https://godoc.org/github.com/keytalk/keytalk-go?status.svg)](http://godoc.org/github.com/keytalk/keytalk-go) [![Build Status](https://travis-ci.org/KeyTalk/Go.svg?branch=master)](https://travis-ci.org/keyTalk/keytalk-go)
 
 
 # Install
 
 ```
-$ go get -u github.com/minio/minio-go
+$ go get -u github.com/keytalk/keytalk-go
 ```
 
 # Sample

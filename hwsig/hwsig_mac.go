@@ -42,7 +42,7 @@ var (
 			return "", err
 		} else {
 
-			filename := path.Join(homedir, "Library", "Keytalk", "uuid")
+			filename := path.Join(homedir, "Library", "KeyTalk", "uuid")
 
 			if _, err := os.Stat(filename); os.IsNotExist(err) {
 				data := make([]byte, 256)
@@ -64,3 +64,10 @@ var (
 		}
 	})
 )
+
+func Description() string {
+	version, _ := syscall.Sysctl("kern.osrelease")
+	// revision, _ := syscall.Sysctl("kern.osrevision")
+	// hostname, _ := syscall.Sysctl("kern.hostname")
+	return fmt.Sprintf("MacOS %s", version)
+}

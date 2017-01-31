@@ -15,14 +15,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/keytalk/libkeytalk/hwsig"
-	"github.com/keytalk/libkeytalk/rccd"
+	"github.com/keytalk/keytalk-go/hwsig"
+	"github.com/keytalk/keytalk-go/rccd"
 	"github.com/op/go-logging"
 
 	"golang.org/x/crypto/pkcs12"
 )
 
-var log = logging.MustGetLogger("libkeytalk:client")
+var log = logging.MustGetLogger("keytalk-go:client")
 
 // Client is the Keytalk Client
 type Client struct {
@@ -48,7 +48,7 @@ func (c *Client) NewRequest(action string, values url.Values) (*http.Request, er
 		return nil, err
 	}
 
-	req.Header.Add("User-Agent", fmt.Sprintf("%s/%s", "libkeytalk", "1.0"))
+	req.Header.Add("User-Agent", fmt.Sprintf("%s/%s", "keytalk-go", "1.0"))
 	req.Header.Add("Cache-Control", "no-cache")
 	req.Header.Add("Accept", "application/json")
 
@@ -122,26 +122,23 @@ type authRequirementsResponse struct {
 	CredentialTypes []string `json:"credential-types"`
 	Formula         string   `json:"hwsig_formula"`
 	Prompt          string   `json:"password-prompt"`
-	ServiceURI      string   `json:"service-uri"`
-}
-
-type requestAuthCredentials struct {
-	Status          string   `json:"status"`
-	CredentialTypes []string `json:"credential-types"`
-	Formula         string   `json:"hwsig_formula"`
-	Prompt          string   `json:"password-prompt"`
-	ServiceURI      string   `json:"service-uri"`
+	ServiceURIs     []string `json:"service-uris"`
 }
 
 type authenticateResponse struct {
-	Status           string   `json:"status"`
-	AuthStatus       string   `json:"auth-status"`
-	Delay            string   `json:"delay"`
-	PasswordValidity string   `json:"password-validity"`
-	CredentialTypes  []string `json:"credential-types"`
-	Formula          string   `json:"hwsig_formula"`
-	Prompt           string   `json:"password-prompt"`
-	ServiceURI       string   `json:"service-uri"`
+	Status           string      `json:"status"`
+	AuthStatus       string      `json:"auth-status"`
+	Delay            string      `json:"delay"`
+	PasswordValidity string      `json:"password-validity"`
+	CredentialTypes  []string    `json:"credential-types"`
+	Formula          string      `json:"hwsig_formula"`
+	Prompt           string      `json:"password-prompt"`
+	Challenges       []Challenge `json:"challenges"`
+}
+
+type Challenge struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
 }
 
 type lastMessagesResponse struct {
@@ -175,9 +172,11 @@ type getCertificateResponse struct {
 type Requirements struct {
 	CredentialTypes []string
 	Formula         []hwsig.Component
+	ServiceURIs     []string
+	Prompt          string
 }
 
-func (kc *Client) hello() error {
+func (kc *Client) Hello() error {
 	log.Debugf("Connecting to KeyTalk server at %s", kc.BaseURL.String())
 
 	values := url.Values{
@@ -199,7 +198,7 @@ func (kc *Client) hello() error {
 	return nil
 }
 
-func (kc *Client) handshake() error {
+func (kc *Client) Handshake() error {
 	values := url.Values{
 		RCDPV2_REQUEST_PARAM_NAME_CALLER_UTC: []string{time.Now().UTC().Format(time.RFC3339)},
 	}
@@ -244,6 +243,8 @@ func (kc *Client) authenticationRequirements(service string) (*Requirements, err
 	return &Requirements{
 		CredentialTypes: resp.CredentialTypes,
 		Formula:         formula,
+		ServiceURIs:     resp.ServiceURIs,
+		Prompt:          resp.Prompt,
 	}, nil
 }
 
@@ -252,7 +253,7 @@ func (kc *Client) isCredentialResponseAuthentication(service string) error {
 	return nil
 }
 
-func (kc *Client) authenticate(creds map[string]string, service string) error {
+func (kc *Client) authenticate(creds map[string]string, service string) ([]Challenge, error) {
 	values := url.Values{}
 
 	for k, v := range creds {
@@ -265,33 +266,34 @@ func (kc *Client) authenticate(creds map[string]string, service string) error {
 	// RCDPV2_REQUEST_PARAM_NAME_DIGEST // sha256
 
 	values.Add(RCDPV2_REQUEST_PARAM_NAME_SERVICE, service)
-	values.Add(RCDPV2_REQUEST_PARAM_NAME_CALLER_HW_DESCRIPTION, "Windows 7, BIOS s/n 1234567890")
+	values.Add(RCDPV2_REQUEST_PARAM_NAME_CALLER_HW_DESCRIPTION, hwsig.Description())
 
 	var resp authenticateResponse
 	if req, err := kc.NewRequest(RCDPV2_REQUEST_AUTHENTICATION, values); err != nil {
-		return err
+		return nil, err
 	} else if err := kc.Do(req, &resp); err != nil {
-		return err
+		return nil, err
 	}
 
 	if resp.Status != RCDPV2_RESPONSE_AUTH_RESULT {
-		return fmt.Errorf("Unexpected response: expected %s, got %s", RCDPV2_RESPONSE_AUTH_RESULT, resp.Status)
+		return nil, fmt.Errorf("Unexpected response: expected %s, got %s", RCDPV2_RESPONSE_AUTH_RESULT, resp.Status)
 	}
 
 	if resp.AuthStatus == "OK" {
+	} else if resp.AuthStatus == "CHALLENGE" {
+		return resp.Challenges, nil
 	} else if resp.AuthStatus == "DELAY" {
 		delay, _ := strconv.Atoi(resp.Delay)
-		return ErrAuthDelay{
+		return nil, ErrAuthDelay{
 			Delay: delay,
 		}
 	} else {
-		return ErrAuth{
+		return nil, ErrAuth{
 			Status: resp.AuthStatus,
 		}
 	}
 
-	return nil
-
+	return nil, nil
 }
 
 type ErrAuth struct {
@@ -372,19 +374,9 @@ func (kc *Client) certificate() (*UserCertificate, error) {
 		return nil, fmt.Errorf("Unexpected response: expected %s, got %s", RCDPV2_RESPONSE_CERT, resp.Status)
 	}
 
-	u, err := url.Parse(fmt.Sprintf("%s/%s", RCDPV2_HTTP_REQUEST_URI_PREFIX, RCDP_VERSION_2_0))
-	if err != nil {
-		return nil, err
-	}
-
-	url := kc.BaseURL.ResolveReference(u)
-
-	password := kc.Client.Jar.Cookies(url)[0].Value // .Get(RCDPV2_HTTP_SID_COOKIE_NAME)
-	password = password[:RCDPV2_PACKAGED_CERT_EXPORT_PASSWDSIZE]
-
 	if der, err := base64.StdEncoding.DecodeString(resp.Cert); err != nil {
 		return nil, err
-	} else if pk, cert, err := pkcs12.Decode(der, password); err != nil {
+	} else if pk, cert, err := pkcs12.Decode(der, kc.Token()[:RCDPV2_PACKAGED_CERT_EXPORT_PASSWDSIZE]); err != nil {
 		return nil, err
 	} else {
 		return &UserCertificate{
@@ -392,6 +384,41 @@ func (kc *Client) certificate() (*UserCertificate, error) {
 			pk:          pk,
 		}, err
 	}
+}
+
+func (kc *Client) Token() string {
+	u, err := url.Parse(fmt.Sprintf("%s/%s/", RCDPV2_HTTP_REQUEST_URI_PREFIX, RCDP_VERSION_2_0))
+	if err != nil {
+		return ""
+	}
+
+	url := kc.BaseURL.ResolveReference(u)
+
+	if len(kc.Client.Jar.Cookies(url)) == 0 {
+		return ""
+	}
+
+	password := kc.Client.Jar.Cookies(url)[0].Value // .Get(RCDPV2_HTTP_SID_COOKIE_NAME)
+	return password[:]
+}
+
+func (kc *Client) SetToken(s string) error {
+	u, err := url.Parse(fmt.Sprintf("%s/%s/", RCDPV2_HTTP_REQUEST_URI_PREFIX, RCDP_VERSION_2_0))
+	if err != nil {
+		return err
+	}
+
+	url := kc.BaseURL.ResolveReference(u)
+
+	kc.Client.Jar.SetCookies(url, []*http.Cookie{
+		&http.Cookie{
+			Name:    RCDPV2_HTTP_SID_COOKIE_NAME,
+			Value:   s,
+			Expires: time.Now().Add(5 * time.Minute),
+		},
+	})
+
+	return nil
 }
 
 func (kc *Client) eoc() error {
@@ -415,46 +442,57 @@ func (uc *UserCertificate) PrivateKey() interface{} {
 	return uc.pk
 }
 
+func (kc *Client) Requirements(service string) (*Requirements, error) {
+	return kc.authenticationRequirements(service)
+}
+
 // Authenticate will authenticate username, password and service with the Keytalk server and return
 // a private key and certificate.
-func (kc *Client) Authenticate(username string, password string, service string) (*UserCertificate, error) {
-	// todo(nl5887): add certificates from rccd to verify
-	if err := kc.hello(); err != nil {
-		return nil, err
-	}
-
-	defer func() {
-		kc.eoc()
-	}()
-
-	if err := kc.handshake(); err != nil {
-		return nil, err
-	}
-
+func (kc *Client) Authenticate(username string, password string, service string) (*AuthenticationResult, error) {
 	creds := map[string]string{}
 
-	if requirements, err := kc.authenticationRequirements(service); err != nil {
+	requirements, err := kc.authenticationRequirements(service)
+	if err != nil {
 		return nil, err
-	} else {
-		for _, v := range requirements.CredentialTypes {
-			switch v {
-			case CRED_USERID:
-				creds[CRED_USERID] = username
-			case CRED_PASSWD:
-				creds[CRED_PASSWD] = password
-			case CRED_HWSIG:
-				if signature, err := hwsig.Calc(requirements.Formula); err == nil {
-					creds[CRED_HWSIG] = signature
-				} else {
-					return nil, err
-				}
+	}
+
+	for _, v := range requirements.CredentialTypes {
+		switch v {
+		case CRED_USERID:
+			creds[CRED_USERID] = username
+		case CRED_PASSWD:
+			creds[CRED_PASSWD] = password
+		case CRED_HWSIG:
+			if signature, err := hwsig.Calc(requirements.Formula); err == nil {
+				creds[CRED_HWSIG] = signature
+			} else {
+				return nil, err
 			}
 		}
 	}
 
-	if err := kc.authenticate(creds, service); err != nil {
+	if challenges, err := kc.authenticate(creds, service); err != nil {
 		return nil, err
+	} else if len(challenges) > 0 {
+		return &AuthenticationResult{
+			Challenges: challenges,
+		}, nil
+	} else if uc, err := kc.certificate(); err != nil {
+		return nil, err
+	} else {
+		return &AuthenticationResult{
+			ServiceURIs:     requirements.ServiceURIs,
+			UserCertificate: uc,
+		}, nil
 	}
+}
 
-	return kc.certificate()
+type AuthenticationResult struct {
+	ServiceURIs []string
+	Challenges  []Challenge
+	*UserCertificate
+}
+
+func (kc *Client) Close() {
+	kc.eoc()
 }

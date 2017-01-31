@@ -96,7 +96,7 @@ func Calc(components []Component) (string, error) {
 		}
 	}
 
-	return fmt.Sprintf("%x", h.Sum(nil)), nil
+	return "CS-" + fmt.Sprintf("%X", h.Sum(nil)), nil
 }
 
 func componentMacAddress() (string, error) {

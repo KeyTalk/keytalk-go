@@ -9,7 +9,12 @@ import (
 	"crypto/x509"
 	"io/ioutil"
 
+	"bufio"
+	"bytes"
+	"fmt"
 	yaml "gopkg.in/yaml.v2"
+	"mime"
+	"net/mail"
 )
 
 // RCCD contains the data of the parsed rccd file
@@ -17,6 +22,8 @@ type RCCD struct {
 	SCA *x509.Certificate
 	PCA *x509.Certificate
 	UCA *x509.Certificate
+
+	ExtraSigningCAs []*x509.Certificate
 
 	// contains the PNG logo file
 	Logo []byte
@@ -46,11 +53,22 @@ type Service struct {
 	Uri              string `yaml:"Uri"`
 	CertValidPercent int    `yaml:"CertValidPercent"`
 	ProxySetting     string `yaml:"ProxySetting"`
-	Users            []User `yaml:"users"`
+	Users            []User `yaml:"Users"`
 }
 
 // User contains the supported user
-type User struct {
+type User string
+
+type Index interface {
+	Logo() string
+
+	SCA() string
+	UCA() string
+	PCA() string
+
+	ExtraSigningCAs() []string
+
+	UserConfig() string
 }
 
 // Open will read and parse the rccd file
@@ -62,58 +80,121 @@ func Open(path string) (*RCCD, error) {
 
 	defer r.Close()
 
-	rccd := RCCD{}
+	files := map[string]*zip.File{}
 	for _, f := range r.File {
-		rc, err := f.Open()
-		if err != nil {
-			return nil, err
-		}
+		files[f.Name] = f
+	}
 
-		switch f.Name {
-		case "content/SCA.der":
-			if der, err := ioutil.ReadAll(rc); err != nil {
+	var index Index
+	if f, ok := files["content.yaml.signed"]; ok {
+		indexv1 := &IndexV1{}
+		if rc, err := f.Open(); err != nil {
+			return nil, err
+		} else if msg, err := mail.ReadMessage(rc); err != nil {
+			return nil, err
+		} else if _, params, err := mime.ParseMediaType(msg.Header.Get("Content-Type")); err != nil {
+			return nil, err
+		} else {
+			scanner := bufio.NewScanner(msg.Body)
+
+			parts := []*bytes.Buffer{}
+
+			var buff *bytes.Buffer
+
+			for scanner.Scan() {
+				l := scanner.Text()
+				if l == fmt.Sprintf("--%s", params["boundary"]) {
+					buff = &bytes.Buffer{}
+					parts = append(parts, buff)
+					continue
+				} else if buff == nil {
+					continue
+				}
+
+				buff.Write([]byte(l))
+				buff.Write([]byte("\n"))
+			}
+
+			if err := scanner.Err(); err != nil {
 				return nil, err
-			} else if pub, err := x509.ParseCertificates(der); err != nil {
+			}
+
+			if err := yaml.Unmarshal(parts[0].Bytes(), indexv1); err != nil {
 				return nil, err
 			} else {
-				rccd.SCA = pub[0]
+				index = indexv1
 			}
-		case "content/PCA.der":
-			if der, err := ioutil.ReadAll(rc); err != nil {
-				return nil, err
-			} else if pub, err := x509.ParseCertificates(der); err != nil {
-				return nil, err
-			} else {
-				rccd.PCA = pub[0]
-			}
-		case "content/UCA.der":
-			if der, err := ioutil.ReadAll(rc); err != nil {
-				return nil, err
-			} else if pub, err := x509.ParseCertificates(der); err != nil {
-				return nil, err
-			} else {
-				rccd.UCA = pub[0]
-			}
-		case "content/logo_v11.png":
-			if v, err := ioutil.ReadAll(rc); err != nil {
-				return nil, err
-			} else {
-				rccd.Logo = v
-			}
-		case "content/user.yaml":
-			if v, err := ioutil.ReadAll(rc); err != nil {
-				return nil, err
-			} else if err := yaml.Unmarshal(v, &rccd); err != nil {
-				return nil, err
-			}
-		case "content/SignedSvrCommPubKey.smime":
-		case "content/resept_logo.bmp":
-		case "content/resept_ico.bmp":
-		case "content/SignedSvrCommPubKey.smime.android":
-		case "content.conf.signed":
-		case "content.conf.signed.android":
-			// todo(nl5887): verify those
 		}
+	} else if f, ok := files["index.yaml"]; ok {
+		indexv2 := &IndexV2{}
+		if rc, err := f.Open(); err != nil {
+			return nil, err
+		} else if v, err := ioutil.ReadAll(rc); err != nil {
+			return nil, err
+		} else if err := yaml.Unmarshal(v, indexv2); err != nil {
+			return nil, err
+		} else {
+			index = indexv2
+		}
+	} else {
+		return nil, fmt.Errorf("No index found.")
+	}
+
+	rccd := RCCD{}
+
+	if f, ok := files[index.Logo()]; !ok {
+	} else if rc, err := f.Open(); err != nil {
+	} else if v, err := ioutil.ReadAll(rc); err != nil {
+	} else {
+		rccd.Logo = v
+	}
+
+	if f, ok := files[index.SCA()]; !ok {
+	} else if rc, err := f.Open(); err != nil {
+	} else if v, err := ioutil.ReadAll(rc); err != nil {
+	} else if pub, err := x509.ParseCertificates(v); err != nil {
+		return nil, err
+	} else {
+		rccd.SCA = pub[0]
+	}
+
+	if f, ok := files[index.PCA()]; !ok {
+	} else if rc, err := f.Open(); err != nil {
+	} else if v, err := ioutil.ReadAll(rc); err != nil {
+	} else if pub, err := x509.ParseCertificates(v); err != nil {
+		return nil, err
+	} else {
+		rccd.PCA = pub[0]
+	}
+
+	if f, ok := files[index.UCA()]; !ok {
+	} else if rc, err := f.Open(); err != nil {
+	} else if v, err := ioutil.ReadAll(rc); err != nil {
+	} else if pub, err := x509.ParseCertificates(v); err != nil {
+		return nil, err
+	} else {
+		rccd.UCA = pub[0]
+	}
+
+	for _, extraSigningCA := range index.ExtraSigningCAs() {
+		if f, ok := files[extraSigningCA]; !ok {
+		} else if rc, err := f.Open(); err != nil {
+		} else if v, err := ioutil.ReadAll(rc); err != nil {
+		} else if pub, err := x509.ParseCertificates(v); err != nil {
+			return nil, err
+		} else {
+			rccd.ExtraSigningCAs = append(rccd.ExtraSigningCAs, pub[0])
+		}
+	}
+
+	if f, ok := files[index.UserConfig()]; !ok {
+		return nil, fmt.Errorf("Could not find yaml in rccd %s %#v.", index.UserConfig(), index)
+	} else if rc, err := f.Open(); err != nil {
+	} else if v, err := ioutil.ReadAll(rc); err != nil {
+		return nil, err
+	} else if err := yaml.Unmarshal(v, &rccd); err != nil {
+		return nil, err
+	} else {
 	}
 
 	return &rccd, nil

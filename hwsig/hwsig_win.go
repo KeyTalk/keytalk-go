@@ -344,3 +344,7 @@ func getDeviceInfo(ClassName string, filter string, def string) func() (string, 
 		return buff.String(), nil
 	}
 }
+
+func Description() string {
+	return fmt.Sprintf("Windows")
+}
