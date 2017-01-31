@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/keytalk/keytalk-go/hwsig"
-	"github.com/keytalk/keytalk-go/rccd"
+	"github.com/KeyTalk/keytalk-go/hwsig"
+	"github.com/KeyTalk/keytalk-go/rccd"
 	"github.com/op/go-logging"
 
 	"golang.org/x/crypto/pkcs12"
